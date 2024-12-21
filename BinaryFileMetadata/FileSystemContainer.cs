@@ -9,6 +9,8 @@ namespace BinaryFileMetadata
     public class FileSystemContainer
     {
         private string containerPath;
+        public string ContainerPath => containerPath;
+
 
         public FileSystemContainer(string path)
         {
@@ -66,12 +68,29 @@ namespace BinaryFileMetadata
             using var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read);
             while (stream.Position < stream.Length)
             {
-                string fileName = ReadString(stream);
-                int fileLength = ReadInt(stream);
-                Console.WriteLine(StringImplementations.FormatFileListing(fileName, fileLength));
-                stream.Seek(fileLength, SeekOrigin.Current);
+                string entryName = ReadString(stream);
+                if (entryName == null) break;
+
+                int entryLength = ReadInt(stream);
+
+                // If it's a directory (starts with "D:"), skip it
+                if (entryName.StartsWith("D:"))
+                {
+                    // Skip the data (which should be 0 for a directory)
+                    if (entryLength > 0)
+                        stream.Seek(entryLength, SeekOrigin.Current);
+
+                    // Optionally print "[directory] <name>"
+                    // or simply continue to ignore it.
+                    continue;
+                }
+
+                // It's a file. Print the file listing
+                Console.WriteLine($"File: {entryName}, Size: {entryLength} bytes");
+                stream.Seek(entryLength, SeekOrigin.Current);
             }
         }
+
 
         public void RemoveFile(string fileName)
         {

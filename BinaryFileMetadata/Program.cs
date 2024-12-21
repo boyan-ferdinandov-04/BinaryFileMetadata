@@ -5,9 +5,9 @@ internal class Program
     static void Main(string[] args)
     {
         Console.WriteLine("Welcome to the Binary File System Simulator.");
-        Console.WriteLine("Commands: cpin <sourcePath> <containerFileName>, ls, rm, exit");
+        Console.WriteLine("Commands: cpin <sourcePath> <containerFileName>, ls, rm, cpout, md, cd, rd, exit");
 
-        var fileSystem = new FileSystemContainer("container2.bin");
+        var fileSystem = new FileSystemContainer("container4.bin");
         var directoryManager = new DirectoryManager(fileSystem);
 
         while (true)
@@ -41,7 +41,14 @@ internal class Program
                         break;
 
                     case "ls":
-                        fileSystem.ListFiles();
+                        try
+                        {
+                            fileSystem.ListFiles();
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error listing files: {ex.Message}");
+                        }
                         break;
 
                     case "rm":
@@ -78,12 +85,41 @@ internal class Program
                         Console.WriteLine($"Directory '{directoryName}' created.");
                         break;
 
+                    case "cd":
+                        if (inputArgs.Length != 2)
+                        {
+                            Console.WriteLine("Usage: cd <directoryName>");
+                            break;
+                        }
+                        try
+                        {
+                            string targetDirectory = inputArgs[1];
+                            directoryManager.ChangeDirectory(targetDirectory);
+                            Console.WriteLine($"Changed directory to '{targetDirectory}'.");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error changing directory: {ex.Message}");
+                        }
+                        break;
+
+                    case "rd":
+                        if (inputArgs.Length != 2)
+                        {
+                            Console.WriteLine("Usage: rd <directoryName>");
+                            break;
+                        }
+                        string directoryToRemove = inputArgs[1];
+                        directoryManager.RemoveDirectory(directoryToRemove);
+                        Console.WriteLine($"Directory '{directoryToRemove}' removed.");
+                        break;
+
                     case "exit":
                         Console.WriteLine("Exiting the program. Goodbye!");
                         return;
 
                     default:
-                        Console.WriteLine("Invalid command. Supported commands: cpin, ls, rm, exit.");
+                        Console.WriteLine("Invalid command. Supported commands: cpin, ls, rm, cpout, md, cd, rd, exit.");
                         break;
                 }
             }
