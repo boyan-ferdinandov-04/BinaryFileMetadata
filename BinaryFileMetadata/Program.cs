@@ -7,7 +7,7 @@ internal class Program
         Console.WriteLine("Welcome to the Binary File System Simulator.");
         Console.WriteLine("Commands: cpin <sourcePath> <containerFileName>, ls, rm, cpout, md, cd, rd, exit");
 
-        var fileSystem = new FileSystemContainer("container4.bin");
+        var fileSystem = new FileSystemContainer("container5.bin");
         var directoryManager = new DirectoryManager(fileSystem);
 
         while (true)

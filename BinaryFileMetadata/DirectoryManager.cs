@@ -12,7 +12,8 @@ namespace BinaryFileMetadata
         public DirectoryManager(FileSystemContainer fileSystem)
         {
             fileSystemContainer = fileSystem;
-            currentDirectory = "/"; // Start at the root directory
+            // Start at the root directory
+            currentDirectory = "/"; 
         }
 
         public void CreateDirectory(string directoryName)
@@ -20,19 +21,15 @@ namespace BinaryFileMetadata
             if (string.IsNullOrWhiteSpace(directoryName))
                 throw new ArgumentException("Directory name cannot be empty.");
 
-            // Normalize e.g. "/foo/bar"
             string normalizedPath = NormalizePath(Path.Combine(currentDirectory, directoryName));
-            // We'll store as "D:/foo/bar"
             string directoryRecordName = "D:" + normalizedPath;
 
             if (DirectoryExists(directoryRecordName))
                 throw new IOException($"Directory '{directoryName}' already exists.");
 
-            // Append a directory record with 0-length data
             using (var stream = new FileStream(fileSystemContainer.ContainerPath, FileMode.Append, FileAccess.Write))
             {
                 WriteString(stream, directoryRecordName);
-                // Write 0-length data
                 WriteInt(stream, 0);
             }
         }
@@ -79,9 +76,6 @@ namespace BinaryFileMetadata
             MarkAsDeleted(directoryRecordName);
         }
 
-        /// <summary>
-        /// Checks if a directory entry named "D:some/path" exists in the container.
-        /// </summary>
         private bool DirectoryExists(string directoryRecordName)
         {
             using (var stream = new FileStream(fileSystemContainer.ContainerPath, FileMode.Open, FileAccess.Read))
@@ -151,9 +145,6 @@ namespace BinaryFileMetadata
             File.Move(tempPath, fileSystemContainer.ContainerPath);
         }
 
-        /// <summary>
-        /// Normalizes a path to use forward slashes and no trailing slash (except for "/").
-        /// </summary>
         private string NormalizePath(string path)
         {
             // Convert backslashes to forward slashes
@@ -165,7 +156,6 @@ namespace BinaryFileMetadata
             return path;
         }
 
-        #region Low-Level Read/Write Helpers
 
         private void WriteString(FileStream stream, string value)
         {
@@ -206,6 +196,5 @@ namespace BinaryFileMetadata
             return BitConverter.ToInt32(intBytes, 0);
         }
 
-        #endregion
     }
 }
