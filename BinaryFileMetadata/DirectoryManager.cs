@@ -1,200 +1,212 @@
 ﻿using System;
 using System.IO;
-using System.Text;
 
 namespace BinaryFileMetadata
 {
     public class DirectoryManager
     {
-        private string currentDirectory;
-        private readonly FileSystemContainer fileSystemContainer;
+        private FileSystemContainer container;
+        private DirectoryEntry root;
+        private DirectoryEntry currentDirectory;
 
-        public DirectoryManager(FileSystemContainer fileSystem)
+        public DirectoryManager(FileSystemContainer container)
         {
-            fileSystemContainer = fileSystem;
-            // Start at the root directory
-            currentDirectory = "/"; 
+            this.container = container;
+
+            // Build a flat tree: everything under "root"
+            root = new DirectoryEntry("\\", null);
+            currentDirectory = root;
+
+            LoadDirectoryTree();
         }
 
-        public void CreateDirectory(string directoryName)
+        /// Reads all entries from the container. If name starts with "D:", treat as a directory; otherwise treat as a file.
+        /// Places them all under 'root' for simplicity.
+
+        private void LoadDirectoryTree()
         {
-            if (string.IsNullOrWhiteSpace(directoryName))
-                throw new ArgumentException("Directory name cannot be empty.");
-
-            string normalizedPath = NormalizePath(Path.Combine(currentDirectory, directoryName));
-            string directoryRecordName = "D:" + normalizedPath;
-
-            if (DirectoryExists(directoryRecordName))
-                throw new IOException($"Directory '{directoryName}' already exists.");
-
-            using (var stream = new FileStream(fileSystemContainer.ContainerPath, FileMode.Append, FileAccess.Write))
-            {
-                WriteString(stream, directoryRecordName);
-                WriteInt(stream, 0);
-            }
-        }
-
-        public void ChangeDirectory(string targetDirectory)
-        {
-            if (targetDirectory == "/")
-            {
-                currentDirectory = "/";
-                return;
-            }
-
-            if (targetDirectory == "..")
-            {
-                if (currentDirectory == "/")
-                {
-                    Console.WriteLine("Already at the root directory.");
-                    return;
-                }
-                currentDirectory = NormalizePath(Path.GetDirectoryName(currentDirectory) ?? "/");
-                return;
-            }
-
-            string newDirectoryPath = NormalizePath(Path.Combine(currentDirectory, targetDirectory));
-            string directoryRecordName = "D:" + newDirectoryPath;
-
-            if (!DirectoryExists(directoryRecordName))
-                throw new DirectoryNotFoundException($"Directory '{targetDirectory}' not found.");
-
-            currentDirectory = newDirectoryPath;
-        }
-
-        public void RemoveDirectory(string directoryName)
-        {
-            if (string.IsNullOrWhiteSpace(directoryName))
-                throw new ArgumentException("Directory name cannot be empty.");
-
-            string normalizedPath = NormalizePath(Path.Combine(currentDirectory, directoryName));
-            string directoryRecordName = "D:" + normalizedPath;
-
-            if (!DirectoryExists(directoryRecordName))
-                throw new DirectoryNotFoundException($"Directory '{directoryName}' not found.");
-
-            MarkAsDeleted(directoryRecordName);
-        }
-
-        private bool DirectoryExists(string directoryRecordName)
-        {
-            using (var stream = new FileStream(fileSystemContainer.ContainerPath, FileMode.Open, FileAccess.Read))
+            using (var stream = new FileStream(container.ContainerPath, FileMode.Open, FileAccess.Read))
             {
                 while (stream.Position < stream.Length)
                 {
-                    string recordName = ReadString(stream);
-                    if (recordName == null) break; // End of file or error
-                    int dataLength = ReadInt(stream);
+                    string entryName = ReadString(stream);
+                    if (entryName == null) break;
 
-                    if (recordName == directoryRecordName)
-                        return true;
+                    int entryLength = ReadInt(stream);
 
-                    // Skip the data (file or directory data). For directories, dataLength should be 0.
-                    if (dataLength > 0)
-                        stream.Seek(dataLength, SeekOrigin.Current);
-                }
-            }
-            return false;
-        }
-
-        private void MarkAsDeleted(string directoryRecordName)
-        {
-            string tempPath = fileSystemContainer.ContainerPath + ".tmp";
-
-            using (var input = new FileStream(fileSystemContainer.ContainerPath, FileMode.Open, FileAccess.Read))
-            using (var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write))
-            {
-                while (input.Position < input.Length)
-                {
-                    string recordName = ReadString(input);
-                    if (recordName == null) break; // End of data
-                    int dataLength = ReadInt(input);
-
-                    if (recordName == directoryRecordName)
+                    if (entryName.StartsWith("D:"))
                     {
-                        // This is the directory to remove, so skip writing it out.
-                        // Also skip the data (which should be 0).
-                        if (dataLength > 0)
-                            input.Seek(dataLength, SeekOrigin.Current);
+                        // It's a directory
+                        string dirName = StringImplementations.Substring(entryName, 2, entryName.Length - 2);
+                        DirectoryEntry dir = new DirectoryEntry(dirName, root);
+                        root.AddSubdirectory(dir);
                     }
                     else
                     {
-                        // Keep this record
-                        WriteString(output, recordName);
-                        WriteInt(output, dataLength);
-
-                        // Copy existing data
-                        if (dataLength > 0)
-                        {
-                            byte[] buffer = new byte[4096];
-                            int remaining = dataLength;
-                            while (remaining > 0)
-                            {
-                                int toRead = Math.Min(buffer.Length, remaining);
-                                int readBytes = input.Read(buffer, 0, toRead);
-                                if (readBytes <= 0) break;
-                                output.Write(buffer, 0, readBytes);
-                                remaining -= readBytes;
-                            }
-                        }
+                        // It's a file
+                        root.AddFile(entryName);
                     }
+
+                    // skip the file/directory data
+                    stream.Seek(entryLength, SeekOrigin.Current);
                 }
             }
-
-            File.Delete(fileSystemContainer.ContainerPath);
-            File.Move(tempPath, fileSystemContainer.ContainerPath);
         }
 
-        private string NormalizePath(string path)
+
+        public void MakeDirectory(string name)
         {
-            // Convert backslashes to forward slashes
-            path = path.Replace("\\", "/");
-            // Trim trailing slashes unless it's the root "/"
-            if (path.EndsWith("/") && path != "/")
-                path = path.TrimEnd('/');
+            // 1) In-memory
+            var newDir = new DirectoryEntry(name, currentDirectory);
+            currentDirectory.AddSubdirectory(newDir);
 
-            return path;
+            // 2) In-container
+            container.CreateDirectoryEntry(name);
+
+            Console.WriteLine($"Directory '{name}' created in '{currentDirectory.Name}'.");
         }
 
-
-        private void WriteString(FileStream stream, string value)
+        public void ChangeDirectory(string target)
         {
-            // If value is null, treat as empty
-            if (value == null) value = "";
-            byte[] stringBytes = Encoding.UTF8.GetBytes(value);
-            WriteInt(stream, stringBytes.Length);
-            stream.Write(stringBytes, 0, stringBytes.Length);
+            // cd \
+            if (StringImplementations.CustomCompare(target, "\\") == 0)
+            {
+                currentDirectory = root;
+                Console.WriteLine("Current directory is now '\\' (root).");
+                return;
+            }
+
+            // cd ..
+            if (StringImplementations.CustomCompare(target, "..") == 0)
+            {
+                if (currentDirectory.Parent == null)
+                {
+                    Console.WriteLine("Already at root directory.");
+                }
+                else
+                {
+                    currentDirectory = currentDirectory.Parent;
+                    Console.WriteLine($"Current directory is now '{currentDirectory.Name}'.");
+                }
+                return;
+            }
+
+            // cd <subdir>
+            var sub = currentDirectory.FindSubdirectory(target);
+            if (sub == null)
+            {
+                Console.WriteLine($"Subdirectory '{target}' not found in '{currentDirectory.Name}'.");
+            }
+            else
+            {
+                currentDirectory = sub;
+                Console.WriteLine($"Current directory is now '{currentDirectory.Name}'.");
+            }
         }
+
+        public void RemoveDirectory(string name)
+        {
+            // find the subdir in memory
+            var targetDir = currentDirectory.FindSubdirectory(name);
+            if (targetDir == null)
+            {
+                Console.WriteLine($"No subdirectory '{name}' in '{currentDirectory.Name}'.");
+                return;
+            }
+
+            // Recursively remove all children from container
+            RecursiveDeleteDirectory(targetDir);
+
+            // Remove the "D:<name>" entry from container
+            container.RemoveDirectoryEntry(name);
+
+            // Remove from parent's memory
+            currentDirectory.RemoveSubdirectory(name);
+
+            Console.WriteLine($"Directory '{name}' removed.");
+        }
+
+        /// Remove files and subdirs that belong to 'dir' from the container. 
+        /// This must happen before we remove the actual directory entry itself.
+
+        private void RecursiveDeleteDirectory(DirectoryEntry dir)
+        {
+            // 1) Remove all files in this directory
+            string[] childFiles = dir.GetFiles();
+            for (int i = 0; i < childFiles.Length; i++)
+            {
+                container.RemoveFile(childFiles[i]);
+            }
+
+            // 2) Remove all subdirectories
+            DirectoryEntry[] childDirs = dir.GetDirectories();
+            for (int i = 0; i < childDirs.Length; i++)
+            {
+                // Recursively remove children
+                RecursiveDeleteDirectory(childDirs[i]);
+                container.RemoveDirectoryEntry(childDirs[i].Name);
+            }
+        }
+
+
+        /// Lists contents (files + subdirectories) of the current directory.
+
+        public void ListCurrentDirectory()
+        {
+            Console.WriteLine($"Contents of directory '{currentDirectory.Name}':");
+            // subdirs
+            var dirs = currentDirectory.GetDirectories();
+            for (int i = 0; i < dirs.Length; i++)
+            {
+                Console.WriteLine($"  [DIR ] {dirs[i].Name}");
+            }
+            // files
+            var files = currentDirectory.GetFiles();
+            for (int i = 0; i < files.Length; i++)
+            {
+                Console.WriteLine($"  [FILE] {files[i]}");
+            }
+        }
+
+        // =========== FILE UTILS (to keep memory in sync) ===========
+
+        /// Called after cpin, to add the file to the current directory in memory.
+
+        public void AddFileToCurrentDirectory(string fileName)
+        {
+            currentDirectory.AddFile(fileName);
+        }
+
+
+        /// Called after rm or similar, to remove the file from the current directory in memory.
+
+        public void RemoveFileFromCurrentDirectory(string fileName)
+        {
+            currentDirectory.RemoveFile(fileName);
+        }
+
+        // =========== HELPER READ METHODS (avoid collisions) ===========
 
         private string ReadString(FileStream stream)
         {
             byte[] lengthBytes = new byte[4];
-            int readLen = stream.Read(lengthBytes, 0, lengthBytes.Length);
-            if (readLen < 4) return null; // Not enough data to read length
+            int rc = stream.Read(lengthBytes, 0, 4);
+            if (rc < 4) return null;
 
             int length = BitConverter.ToInt32(lengthBytes, 0);
-            if (length < 0) return null; // Invalid length
+            byte[] data = new byte[length];
+            int readData = stream.Read(data, 0, length);
+            if (readData < length) return null;
 
-            byte[] stringBytes = new byte[length];
-            int actuallyRead = stream.Read(stringBytes, 0, length);
-            if (actuallyRead < length) return null; // Not enough data
-
-            return Encoding.UTF8.GetString(stringBytes);
-        }
-
-        private void WriteInt(FileStream stream, int value)
-        {
-            byte[] intBytes = BitConverter.GetBytes(value);
-            stream.Write(intBytes, 0, intBytes.Length);
+            return System.Text.Encoding.UTF8.GetString(data);
         }
 
         private int ReadInt(FileStream stream)
         {
             byte[] intBytes = new byte[4];
-            int readLen = stream.Read(intBytes, 0, intBytes.Length);
-            if (readLen < 4) return -1; // Could throw an exception or handle gracefully
+            int rc = stream.Read(intBytes, 0, 4);
+            if (rc < 4) return -1;
             return BitConverter.ToInt32(intBytes, 0);
         }
-
     }
 }

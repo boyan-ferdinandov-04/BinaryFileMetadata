@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 
 namespace BinaryFileMetadata
 {
@@ -11,7 +8,6 @@ namespace BinaryFileMetadata
         private string containerPath;
         public string ContainerPath => containerPath;
 
-
         public FileSystemContainer(string path)
         {
             containerPath = path;
@@ -19,7 +15,7 @@ namespace BinaryFileMetadata
             {
                 using (File.Create(containerPath))
                 {
-
+                    // Ensure container file exists
                 }
             }
         }
@@ -39,58 +35,59 @@ namespace BinaryFileMetadata
 
         public void CopyFileOutFromContainer(string containerFileName, string destinationPath)
         {
-            using var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read);
-            while (stream.Position < stream.Length)
+            using (var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
             {
-                string fileName = ReadString(stream);
-                int fileLength = ReadInt(stream);
-
-                if (fileName == containerFileName)
+                while (stream.Position < stream.Length)
                 {
-                    byte[] fileData = new byte[fileLength];
-                    stream.Read(fileData, 0, fileLength);
+                    string fileName = ReadString(stream);
+                    int fileLength = ReadInt(stream);
 
-                    File.WriteAllBytes(destinationPath, fileData);
-                    return;
-                }
-                else
-                {
-                    stream.Seek(fileLength, SeekOrigin.Current);
+                    // Skip directories
+                    if (fileName.StartsWith("D:"))
+                    {
+                        stream.Seek(fileLength, SeekOrigin.Current);
+                        continue;
+                    }
+
+                    if (fileName == containerFileName)
+                    {
+                        byte[] fileData = ReadBytes(stream, fileLength);
+                        File.WriteAllBytes(destinationPath, fileData);
+                        return;
+                    }
+                    else
+                    {
+                        stream.Seek(fileLength, SeekOrigin.Current);
+                    }
                 }
             }
-
             throw new FileNotFoundException($"File '{containerFileName}' not found in the container.");
         }
 
-
         public void ListFiles()
         {
-            using var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read);
-            while (stream.Position < stream.Length)
+            using (var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
             {
-                string entryName = ReadString(stream);
-                if (entryName == null) break;
-
-                int entryLength = ReadInt(stream);
-
-                // If it's a directory (starts with "D:"), skip it
-                if (entryName.StartsWith("D:"))
+                while (stream.Position < stream.Length)
                 {
-                    // Skip the data (which should be 0 for a directory)
-                    if (entryLength > 0)
-                        stream.Seek(entryLength, SeekOrigin.Current);
+                    string entryName = ReadString(stream);
+                    if (entryName == null) break;
 
-                    // Optionally print "[directory] <name>"
-                    // or simply continue to ignore it.
-                    continue;
+                    int entryLength = ReadInt(stream);
+
+                    if (entryName.StartsWith("D:"))
+                    {
+                        Console.WriteLine($"[Dir ] {entryName.Substring(2)}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[File] {entryName}, Size: {entryLength} bytes");
+                    }
+
+                    stream.Seek(entryLength, SeekOrigin.Current);
                 }
-
-                // It's a file. Print the file listing
-                Console.WriteLine($"File: {entryName}, Size: {entryLength} bytes");
-                stream.Seek(entryLength, SeekOrigin.Current);
             }
         }
-
 
         public void RemoveFile(string fileName)
         {
@@ -111,7 +108,7 @@ namespace BinaryFileMetadata
                     }
                     else
                     {
-                        // Skip the file data
+                        // skip the file data
                         input.Seek(fileLength, SeekOrigin.Current);
                     }
                 }
@@ -120,16 +117,74 @@ namespace BinaryFileMetadata
             File.Delete(containerPath);
             File.Move(tempPath, containerPath);
         }
+
+        // --- NEW METHODS FOR DIRECTORIES BELOW ---
+
+        /// <summary>
+        /// Create a directory entry. We store a special name "D:MyFolder"
+        /// plus a (possibly empty) payload.
+        /// </summary>
+        public void CreateDirectoryEntry(string directoryName)
+        {
+            using (var stream = new FileStream(containerPath, FileMode.Append, FileAccess.Write))
+            {
+                string dirEntryName = "D:" + directoryName;
+                WriteString(stream, dirEntryName);
+
+                // For now, we can store an empty payload or minimal metadata.
+                // Just store 0 bytes for directory metadata.
+                byte[] emptyPayload = new byte[0];
+                WriteBytes(stream, emptyPayload);
+            }
+        }
+
+        /// <summary>
+        /// Remove a directory entry by name "D:<dirName>" (assuming sub-contents already removed).
+        /// </summary>
+        public void RemoveDirectoryEntry(string directoryName)
+        {
+            string dirFullName = "D:" + directoryName;
+            string tempPath = containerPath + ".tmp";
+
+            using (var input = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
+            using (var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write))
+            {
+                while (input.Position < input.Length)
+                {
+                    string currentName = ReadString(input);
+                    int dataLength = ReadInt(input);
+
+                    if (currentName == dirFullName)
+                    {
+                        // Skip these directory bytes
+                        input.Seek(dataLength, SeekOrigin.Current);
+                    }
+                    else
+                    {
+                        // Copy as-is
+                        WriteString(output, currentName);
+                        WriteBytes(output, ReadBytes(input, dataLength));
+                    }
+                }
+            }
+
+            File.Delete(containerPath);
+            File.Move(tempPath, containerPath);
+        }
+
+        // --- HELPER METHODS BELOW ---
         private byte[] ReadBytes(FileStream stream, int length)
         {
             byte[] data = new byte[length];
             stream.Read(data, 0, length);
             return data;
         }
+
         private void WriteString(FileStream stream, string value)
         {
             byte[] lengthBytes = BitConverter.GetBytes(value.Length);
             stream.Write(lengthBytes, 0, lengthBytes.Length);
+
             byte[] stringBytes = System.Text.Encoding.UTF8.GetBytes(value);
             stream.Write(stringBytes, 0, stringBytes.Length);
         }
@@ -137,10 +192,12 @@ namespace BinaryFileMetadata
         private string ReadString(FileStream stream)
         {
             byte[] lengthBytes = new byte[4];
-            stream.Read(lengthBytes, 0, lengthBytes.Length);
+            int readCount = stream.Read(lengthBytes, 0, lengthBytes.Length);
+            if (readCount < 4) return null;
+
             int length = BitConverter.ToInt32(lengthBytes, 0);
             byte[] stringBytes = new byte[length];
-            stream.Read(stringBytes, 0, stringBytes.Length);
+            stream.Read(stringBytes, 0, length);
             return System.Text.Encoding.UTF8.GetString(stringBytes);
         }
 
@@ -157,6 +214,5 @@ namespace BinaryFileMetadata
             stream.Read(intBytes, 0, intBytes.Length);
             return BitConverter.ToInt32(intBytes, 0);
         }
-
     }
 }
