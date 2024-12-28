@@ -20,7 +20,7 @@ namespace BinaryFileMetadata
             }
         }
 
-        public void CopyFileIntoContainer(string sourcePath, string containerFileName)
+        public void CopyFileIntoContainer(string sourcePath, string fullPath)
         {
             if (!File.Exists(sourcePath))
                 throw new FileNotFoundException($"Source file '{sourcePath}' not found.");
@@ -28,40 +28,45 @@ namespace BinaryFileMetadata
             var bytes = File.ReadAllBytes(sourcePath);
             using (var stream = new FileStream(containerPath, FileMode.Append, FileAccess.Write))
             {
-                WriteString(stream, containerFileName);
+                WriteString(stream, fullPath);
                 WriteBytes(stream, bytes);
             }
+
+            // Debug statement
+            Console.WriteLine($"Debug: Stored file '{fullPath}' with size {bytes.Length} bytes.");
         }
 
-        public void CopyFileOutFromContainer(string containerFileName, string destinationPath)
+        public void CopyFileOutFromContainer(string fullPath, string destinationPath)
         {
             using (var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
             {
                 while (stream.Position < stream.Length)
                 {
-                    string fileName = ReadString(stream);
-                    int fileLength = ReadInt(stream);
+                    string entryName = ReadString(stream);
+                    if (entryName == null) break;
+
+                    int entryLength = ReadInt(stream);
 
                     // Skip directories
-                    if (fileName.StartsWith("D:"))
+                    if (entryName.StartsWith("D:"))
                     {
-                        stream.Seek(fileLength, SeekOrigin.Current);
+                        stream.Seek(entryLength, SeekOrigin.Current);
                         continue;
                     }
 
-                    if (fileName == containerFileName)
+                    if (entryName == fullPath)
                     {
-                        byte[] fileData = ReadBytes(stream, fileLength);
+                        byte[] fileData = ReadBytes(stream, entryLength);
                         File.WriteAllBytes(destinationPath, fileData);
                         return;
                     }
                     else
                     {
-                        stream.Seek(fileLength, SeekOrigin.Current);
+                        stream.Seek(entryLength, SeekOrigin.Current);
                     }
                 }
             }
-            throw new FileNotFoundException($"File '{containerFileName}' not found in the container.");
+            throw new FileNotFoundException($"File '{fullPath}' not found in the container.");
         }
 
         public void ListFiles()
@@ -89,61 +94,8 @@ namespace BinaryFileMetadata
             }
         }
 
-        public void RemoveFile(string fileName)
+        public void RemoveFile(string fullPath)
         {
-            string tempPath = containerPath + ".tmp";
-
-            using (var input = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
-            using (var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write))
-            {
-                while (input.Position < input.Length)
-                {
-                    string currentFileName = ReadString(input);
-                    int fileLength = ReadInt(input);
-
-                    if (currentFileName != fileName)
-                    {
-                        WriteString(output, currentFileName);
-                        WriteBytes(output, ReadBytes(input, fileLength));
-                    }
-                    else
-                    {
-                        // skip the file data
-                        input.Seek(fileLength, SeekOrigin.Current);
-                    }
-                }
-            }
-
-            File.Delete(containerPath);
-            File.Move(tempPath, containerPath);
-        }
-
-        // --- NEW METHODS FOR DIRECTORIES BELOW ---
-
-        /// <summary>
-        /// Create a directory entry. We store a special name "D:MyFolder"
-        /// plus a (possibly empty) payload.
-        /// </summary>
-        public void CreateDirectoryEntry(string directoryName)
-        {
-            using (var stream = new FileStream(containerPath, FileMode.Append, FileAccess.Write))
-            {
-                string dirEntryName = "D:" + directoryName;
-                WriteString(stream, dirEntryName);
-
-                // For now, we can store an empty payload or minimal metadata.
-                // Just store 0 bytes for directory metadata.
-                byte[] emptyPayload = new byte[0];
-                WriteBytes(stream, emptyPayload);
-            }
-        }
-
-        /// <summary>
-        /// Remove a directory entry by name "D:<dirName>" (assuming sub-contents already removed).
-        /// </summary>
-        public void RemoveDirectoryEntry(string directoryName)
-        {
-            string dirFullName = "D:" + directoryName;
             string tempPath = containerPath + ".tmp";
 
             using (var input = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
@@ -154,9 +106,9 @@ namespace BinaryFileMetadata
                     string currentName = ReadString(input);
                     int dataLength = ReadInt(input);
 
-                    if (currentName == dirFullName)
+                    if (currentName == fullPath)
                     {
-                        // Skip these directory bytes
+                        // Skip this entry
                         input.Seek(dataLength, SeekOrigin.Current);
                     }
                     else
@@ -172,7 +124,67 @@ namespace BinaryFileMetadata
             File.Move(tempPath, containerPath);
         }
 
-        // --- HELPER METHODS BELOW ---
+        public void CreateDirectoryEntry(string fullPath)
+        {
+            using (var stream = new FileStream(containerPath, FileMode.Append, FileAccess.Write))
+            {
+                string dirEntryName = "D:" + fullPath;
+                WriteString(stream, dirEntryName);
+
+                // Store an empty payload for directories
+                byte[] emptyPayload = new byte[0];
+                WriteBytes(stream, emptyPayload);
+            }
+        }
+
+
+        public long GetFileSizeInContainer(string fullPath)
+        {
+
+            using (var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
+            {
+                while (stream.Position < stream.Length)
+                {
+                    string entryName = ReadString(stream);
+                    if (entryName == null)
+                    {
+                        Console.WriteLine("Debug: Reached end of container without finding the file.");
+                        break;
+                    }
+
+                    int entryLength = ReadInt(stream);
+
+                    
+                    // Skip directories
+                    if (entryName.StartsWith("D:"))
+                    {
+                        stream.Seek(entryLength, SeekOrigin.Current);
+                        continue;
+                    }
+
+                    // It's a file
+                    if (String.Equals(entryName, fullPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Move past the file data
+                        stream.Seek(entryLength, SeekOrigin.Current);
+                        return entryLength;
+                    }
+                    else
+                    {
+                        // Not a match; skip the file data
+                        stream.Seek(entryLength, SeekOrigin.Current);
+                    }
+                }
+            }
+
+            // Not found in container
+            return -1;
+        }
+
+
+
+
+        // Helper methods
         private byte[] ReadBytes(FileStream stream, int length)
         {
             byte[] data = new byte[length];

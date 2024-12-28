@@ -9,7 +9,7 @@ namespace BinaryFileMetadata
             Console.WriteLine("Welcome to the Binary File System Simulator (with directories).");
             Console.WriteLine("Commands: cpin <src> <fileName>, cpout <fileName> <dest>, rm <fileName>, ls, md <dir>, cd <dir>, rd <dir>, exit");
 
-            var fileSystem = new FileSystemContainer("container11.bin");
+            var fileSystem = new FileSystemContainer("container3.bin");
             var directoryManager = new DirectoryManager(fileSystem);
 
             while (true)
@@ -33,17 +33,21 @@ namespace BinaryFileMetadata
                         case "cpin":
                             if (inputArgs.Length != 3)
                             {
-                                Console.WriteLine("Usage: cpin <sourcePath> <containerFileName>");
+                                Console.WriteLine("Usage: cpin <sourcePath> <fileName>");
                                 break;
                             }
                             {
                                 string sourcePath = inputArgs[1];
-                                string containerFileName = inputArgs[2];
-                                fileSystem.CopyFileIntoContainer(sourcePath, containerFileName);
-                                directoryManager.AddFileToCurrentDirectory(containerFileName);
-                                Console.WriteLine($"File '{sourcePath}' copied into container as '{containerFileName}'.");
+                                string fileName = inputArgs[2];
+                                string currentDirPath = directoryManager.GetCurrentDirectoryFullPath();
+                                string fileFullPath = currentDirPath == "\\" ? "\\" + fileName : currentDirPath + "\\" + fileName;
+
+                                fileSystem.CopyFileIntoContainer(sourcePath, fileFullPath);
+                                directoryManager.AddFileToCurrentDirectory(fileName);
+                                Console.WriteLine($"File '{sourcePath}' copied into container as '{fileFullPath}'.");
                             }
                             break;
+
 
                         case "cpout":
                             if (inputArgs.Length != 3)
@@ -75,7 +79,8 @@ namespace BinaryFileMetadata
 
                         case "ls":
                             // Use the directory manager to list current dir
-                            directoryManager.ListCurrentDirectory();
+                            //directoryManager.ListCurrentDirectory();
+                            fileSystem.ListFiles();
                             break;
 
                         case "md":

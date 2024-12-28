@@ -13,17 +13,14 @@ namespace BinaryFileMetadata
         {
             this.container = container;
 
-            // Build a flat tree: everything under "root"
+            // Initialize root
             root = new DirectoryEntry("\\", null);
             currentDirectory = root;
 
             LoadDirectoryTree();
         }
 
-        /// Reads all entries from the container. If name starts with "D:", treat as a directory; otherwise treat as a file.
-        /// Places them all under 'root' for simplicity.
-
-        private void LoadDirectoryTree()
+        public void LoadDirectoryTree()
         {
             using (var stream = new FileStream(container.ContainerPath, FileMode.Open, FileAccess.Read))
             {
@@ -34,23 +31,159 @@ namespace BinaryFileMetadata
 
                     int entryLength = ReadInt(stream);
 
+                    // Debug statement
+                    Console.WriteLine($"Debug: Loading entry '{entryName}' with length {entryLength} bytes.");
+
                     if (entryName.StartsWith("D:"))
                     {
-                        // It's a directory
-                        string dirName = StringImplementations.Substring(entryName, 2, entryName.Length - 2);
-                        DirectoryEntry dir = new DirectoryEntry(dirName, root);
-                        root.AddSubdirectory(dir);
+                        // It's a directory with full path
+                        string dirFullPath = StringImplementations.Substring(entryName, 2, entryName.Length - 2);
+                        Console.WriteLine($"Debug: Processing directory '{dirFullPath}'.");
+                        GetOrCreateDirectory(dirFullPath);
                     }
                     else
                     {
-                        // It's a file
-                        root.AddFile(entryName);
+                        // It's a file with full path
+                        string fileFullPath = entryName;
+                        Console.WriteLine($"Debug: Processing file '{fileFullPath}'.");
+                        // Extract the directory path and file name
+                        string dirPath, fileName;
+                        SplitPath(fileFullPath, out dirPath, out fileName);
+
+                        // Get or create the directory
+                        DirectoryEntry dir = GetOrCreateDirectory(dirPath);
+
+                        // Add the file to the directory
+                        dir.AddFile(fileName);
                     }
 
-                    // skip the file/directory data
+                    // Skip the file/directory data
                     stream.Seek(entryLength, SeekOrigin.Current);
                 }
             }
+        }
+
+
+
+        /// <summary>
+        /// Splits a full path into directory path and file name.
+        /// For example, "\FolderA\SubFolder\file1.txt" -> "\FolderA\SubFolder", "file1.txt"
+        /// </summary>
+        private void SplitPath(string fullPath, out string directoryPath, out string fileName)
+        {
+            // Find the last '\' character
+            int lastSlash = -1;
+            for (int i = 0; i < fullPath.Length; i++)
+            {
+                if (fullPath[i] == '\\')
+                {
+                    lastSlash = i;
+                }
+            }
+
+            if (lastSlash == -1)
+            {
+                // No directory, file is in root
+                directoryPath = "\\";
+                fileName = fullPath;
+            }
+            else if (lastSlash == 0)
+            {
+                // Directory is root
+                directoryPath = "\\";
+                fileName = StringImplementations.Substring(fullPath, lastSlash + 1, fullPath.Length - (lastSlash + 1));
+            }
+            else
+            {
+                directoryPath = StringImplementations.Substring(fullPath, 0, lastSlash);
+                fileName = StringImplementations.Substring(fullPath, lastSlash + 1, fullPath.Length - (lastSlash + 1));
+            }
+        }
+
+        /// <summary>
+        /// Gets or creates a directory based on its full path.
+        /// </summary>
+        private DirectoryEntry GetOrCreateDirectory(string dirFullPath)
+        {
+            if (StringImplementations.CustomCompare(dirFullPath, "\\") == 0)
+            {
+                return root;
+            }
+
+            // Split the path into components
+            string[] parts = SplitFullPath(dirFullPath);
+            DirectoryEntry current = root;
+
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string part = parts[i];
+                DirectoryEntry sub = current.FindSubdirectory(part);
+                if (sub == null)
+                {
+                    // Create new directory
+                    sub = new DirectoryEntry(part, current);
+                    current.AddSubdirectory(sub);
+                }
+                current = sub;
+            }
+
+            return current;
+        }
+
+        /// <summary>
+        /// Splits a full path into parts, e.g., "\FolderA\SubFolder" -> ["FolderA", "SubFolder"]
+        /// </summary>
+        private string[] SplitFullPath(string fullPath)
+        {
+            // Count the number of '\' to determine the number of parts
+            int count = 0;
+            for (int i = 0; i < fullPath.Length; i++)
+            {
+                if (fullPath[i] == '\\') count++;
+            }
+
+            // Handle cases where fullPath is just "\" or empty
+            if (count <= 0)
+            {
+                return new string[0];
+            }
+
+            // Allocate parts based on the number of backslashes
+            string[] parts = new string[count];
+            int partsIndex = 0;
+            int start = 1; // Skip the first '\'
+
+            for (int i = 1; i < fullPath.Length; i++)
+            {
+                if (fullPath[i] == '\\')
+                {
+                    int length = i - start;
+                    if (length > 0)
+                    {
+                        parts[partsIndex++] = StringImplementations.Substring(fullPath, start, length);
+                    }
+                    else
+                    {
+                        // Handle consecutive backslashes or trailing backslash
+                        parts[partsIndex++] = string.Empty;
+                    }
+                    start = i + 1;
+                }
+            }
+
+            // Last part
+            if (start < fullPath.Length)
+            {
+                int length = fullPath.Length - start;
+                parts[partsIndex++] = StringImplementations.Substring(fullPath, start, length);
+            }
+            else if (partsIndex < parts.Length)
+            {
+                // If the path ends with a backslash, assign an empty string
+                parts[partsIndex++] = string.Empty;
+            }
+
+            return parts;
         }
 
 
@@ -61,10 +194,15 @@ namespace BinaryFileMetadata
             currentDirectory.AddSubdirectory(newDir);
 
             // 2) In-container
-            container.CreateDirectoryEntry(name);
+            string currentDirPath = currentDirectory.GetFullPath();
+            string newDirFullPath = currentDirPath == "\\" ? "\\" + name : currentDirPath + "\\" + name;
+            container.CreateDirectoryEntry(newDirFullPath);
 
-            Console.WriteLine($"Directory '{name}' created in '{currentDirectory.Name}'.");
+            // Debug statement
+            Console.WriteLine($"Debug: Created directory '{newDirFullPath}'.");
         }
+
+
 
         public void ChangeDirectory(string target)
         {
@@ -117,8 +255,9 @@ namespace BinaryFileMetadata
             // Recursively remove all children from container
             RecursiveDeleteDirectory(targetDir);
 
-            // Remove the "D:<name>" entry from container
-            container.RemoveDirectoryEntry(name);
+            // Remove the "D:<fullPath>" entry from container
+            string dirFullPath = targetDir.GetFullPath();
+            container.RemoveFile("D:" + dirFullPath);
 
             // Remove from parent's memory
             currentDirectory.RemoveSubdirectory(name);
@@ -126,16 +265,19 @@ namespace BinaryFileMetadata
             Console.WriteLine($"Directory '{name}' removed.");
         }
 
+        /// <summary>
         /// Remove files and subdirs that belong to 'dir' from the container. 
         /// This must happen before we remove the actual directory entry itself.
-
+        /// </summary>
         private void RecursiveDeleteDirectory(DirectoryEntry dir)
         {
             // 1) Remove all files in this directory
             string[] childFiles = dir.GetFiles();
             for (int i = 0; i < childFiles.Length; i++)
             {
-                container.RemoveFile(childFiles[i]);
+                // Get the full path of the file
+                string fileFullPath = dir.GetFullPath() == "\\" ? "\\" + childFiles[i] : dir.GetFullPath() + "\\" + childFiles[i];
+                container.RemoveFile(fileFullPath);
             }
 
             // 2) Remove all subdirectories
@@ -144,48 +286,62 @@ namespace BinaryFileMetadata
             {
                 // Recursively remove children
                 RecursiveDeleteDirectory(childDirs[i]);
-                container.RemoveDirectoryEntry(childDirs[i].Name);
+                string childDirFullPath = childDirs[i].GetFullPath();
+                container.RemoveFile("D:" + childDirFullPath);
             }
         }
-
-
-        /// Lists contents (files + subdirectories) of the current directory.
 
         public void ListCurrentDirectory()
         {
             Console.WriteLine($"Contents of directory '{currentDirectory.Name}':");
-            // subdirs
+
+            // 1) List subdirectories
             var dirs = currentDirectory.GetDirectories();
             for (int i = 0; i < dirs.Length; i++)
             {
-                Console.WriteLine($"  [DIR ] {dirs[i].Name}");
+                Console.WriteLine($"[Dir ] {dirs[i].Name}");
             }
-            // files
+
+            // 2) List files with size
             var files = currentDirectory.GetFiles();
             for (int i = 0; i < files.Length; i++)
             {
-                Console.WriteLine($"  [FILE] {files[i]}");
+                // Get the full path of the file
+                string fileFullPath = currentDirectory.GetFullPath() == "\\" ? "\\" + files[i] : currentDirectory.GetFullPath() + "\\" + files[i];
+                long size = container.GetFileSizeInContainer(fileFullPath);
+
+                // Handle not found
+                if (size < 0)
+                {
+                    Console.WriteLine($"  [File] {files[i]}, Size: -1B;");
+                }
+                else
+                {
+                    // Use FormatFileListing to display file name and size
+                    string formatted = StringImplementations.FormatFileListing(files[i], (int)size);
+                    Console.WriteLine($"  [File] {formatted}");
+                }
             }
         }
 
-        // =========== FILE UTILS (to keep memory in sync) ===========
 
-        /// Called after cpin, to add the file to the current directory in memory.
 
         public void AddFileToCurrentDirectory(string fileName)
         {
             currentDirectory.AddFile(fileName);
         }
 
-
-        /// Called after rm or similar, to remove the file from the current directory in memory.
-
         public void RemoveFileFromCurrentDirectory(string fileName)
         {
             currentDirectory.RemoveFile(fileName);
         }
 
-        // =========== HELPER READ METHODS (avoid collisions) ===========
+        public string GetCurrentDirectoryFullPath()
+        {
+            return currentDirectory.GetFullPath();
+        }
+
+        //Helper functions
 
         private string ReadString(FileStream stream)
         {
@@ -204,7 +360,7 @@ namespace BinaryFileMetadata
         private int ReadInt(FileStream stream)
         {
             byte[] intBytes = new byte[4];
-            int rc = stream.Read(intBytes, 0, 4);
+            int rc = stream.Read(intBytes, 0, intBytes.Length);
             if (rc < 4) return -1;
             return BitConverter.ToInt32(intBytes, 0);
         }

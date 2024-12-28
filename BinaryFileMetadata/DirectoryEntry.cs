@@ -2,8 +2,6 @@
 
 namespace BinaryFileMetadata
 {
-    /// An in-memory representation of a directory. 
-    /// Holds sub-directories and file names.
 
     public class DirectoryEntry
     {
@@ -49,7 +47,6 @@ namespace BinaryFileMetadata
             {
                 if (subDirectories[i].Name == directoryName)
                 {
-                    // Shift everything down
                     for (int j = i; j < dirCount - 1; j++)
                     {
                         subDirectories[j] = subDirectories[j + 1];
@@ -104,7 +101,6 @@ namespace BinaryFileMetadata
             {
                 if (files[i] == fileName)
                 {
-                    // Shift everything down
                     for (int j = i; j < fileCount - 1; j++)
                     {
                         files[j] = files[j + 1];
@@ -126,5 +122,22 @@ namespace BinaryFileMetadata
             }
             return result;
         }
+
+
+        public string GetFullPath()
+        {
+            if (Parent == null)
+                return "\\"; 
+            else
+            {
+                string parentPath = Parent.GetFullPath();
+                if (StringImplementations.CustomCompare(parentPath, "\\") == 0)
+                    return "\\" + Name;
+                else
+                    return parentPath + "\\" + Name;
+            }
+        }
+
+
     }
 }
