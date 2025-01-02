@@ -118,9 +118,12 @@ namespace BinaryFileMetadata
         /// Returns 0 if equal, < 0 if a < b, > 0 if a > b.
         public static int CustomCompare(string a, string b)
         {
-            if (a == null && b == null) return 0;
-            if (a == null) return -1;
-            if (b == null) return 1;
+            if (a == null && b == null) 
+                return 0;
+            if (a == null) 
+                return -1;
+            if (b == null) 
+                return 1;
 
             int length = a.Length < b.Length ? a.Length : b.Length;
             for (int i = 0; i < length; i++)
@@ -145,6 +148,37 @@ namespace BinaryFileMetadata
                 }
             }
             return true;
+        }
+        public static bool StartsWith(string input, string prefix)
+        {
+            // If prefix is null, treat it as empty string
+            if (prefix == null)
+            {
+                prefix = string.Empty;
+            }
+
+            // If input is null, it can only start with a null or empty prefix
+            if (input == null)
+            {
+                return prefix.Length == 0;
+            }
+
+            // If prefix length is greater than input length, input cannot start with prefix
+            if (prefix.Length > input.Length)
+            {
+                return false;
+            }
+
+            // Compare each character of the prefix with the input
+            for (int i = 0; i < prefix.Length; i++)
+            {
+                if (input[i] != prefix[i])
+                {
+                    return false; // Mismatch found
+                }
+            }
+
+            return true; // All characters matched
         }
     }
 }

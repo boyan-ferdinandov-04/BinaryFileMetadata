@@ -9,13 +9,13 @@ namespace BinaryFileMetadata
             Console.WriteLine("Welcome to the Binary File System Simulator (with directories).");
             Console.WriteLine("Commands: cpin <src> <fileName>, cpout <fileName> <dest>, rm <fileName>, ls, md <dir>, cd <dir>, rd <dir>, exit");
 
-            var fileSystem = new FileSystemContainer("container3.bin");
+            var fileSystem = new FileSystemContainer("container5.bin");
             var directoryManager = new DirectoryManager(fileSystem);
 
             while (true)
             {
                 Console.Write("\nEnter command: ");
-                var input = Console.ReadLine();
+                string? input = Console.ReadLine();
 
                 if (StringImplementations.IsNullOrWhiteSpace(input))
                 {
@@ -78,7 +78,6 @@ namespace BinaryFileMetadata
                             break;
 
                         case "ls":
-                            // Use the directory manager to list current dir
                             //directoryManager.ListCurrentDirectory();
                             fileSystem.ListFiles();
                             break;

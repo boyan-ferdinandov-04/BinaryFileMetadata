@@ -27,7 +27,8 @@ namespace BinaryFileMetadata
                 while (stream.Position < stream.Length)
                 {
                     string entryName = ReadString(stream);
-                    if (entryName == null) break;
+                    if (entryName == null) 
+                        break;
 
                     int entryLength = ReadInt(stream);
 
@@ -63,12 +64,6 @@ namespace BinaryFileMetadata
             }
         }
 
-
-
-        /// <summary>
-        /// Splits a full path into directory path and file name.
-        /// For example, "\FolderA\SubFolder\file1.txt" -> "\FolderA\SubFolder", "file1.txt"
-        /// </summary>
         private void SplitPath(string fullPath, out string directoryPath, out string fileName)
         {
             // Find the last '\' character
@@ -100,9 +95,6 @@ namespace BinaryFileMetadata
             }
         }
 
-        /// <summary>
-        /// Gets or creates a directory based on its full path.
-        /// </summary>
         private DirectoryEntry GetOrCreateDirectory(string dirFullPath)
         {
             if (StringImplementations.CustomCompare(dirFullPath, "\\") == 0)
@@ -130,9 +122,6 @@ namespace BinaryFileMetadata
             return current;
         }
 
-        /// <summary>
-        /// Splits a full path into parts, e.g., "\FolderA\SubFolder" -> ["FolderA", "SubFolder"]
-        /// </summary>
         private string[] SplitFullPath(string fullPath)
         {
             // Count the number of '\' to determine the number of parts
@@ -265,10 +254,6 @@ namespace BinaryFileMetadata
             Console.WriteLine($"Directory '{name}' removed.");
         }
 
-        /// <summary>
-        /// Remove files and subdirs that belong to 'dir' from the container. 
-        /// This must happen before we remove the actual directory entry itself.
-        /// </summary>
         private void RecursiveDeleteDirectory(DirectoryEntry dir)
         {
             // 1) Remove all files in this directory

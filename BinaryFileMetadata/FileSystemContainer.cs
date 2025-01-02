@@ -48,7 +48,7 @@ namespace BinaryFileMetadata
                     int entryLength = ReadInt(stream);
 
                     // Skip directories
-                    if (entryName.StartsWith("D:"))
+                    if (StringImplementations.StartsWith(entryName, "D:"))
                     {
                         stream.Seek(entryLength, SeekOrigin.Current);
                         continue;
@@ -76,17 +76,18 @@ namespace BinaryFileMetadata
                 while (stream.Position < stream.Length)
                 {
                     string entryName = ReadString(stream);
-                    if (entryName == null) break;
+                    if (entryName == null) 
+                        break;
 
                     int entryLength = ReadInt(stream);
 
-                    if (entryName.StartsWith("D:"))
+                    if (StringImplementations.StartsWith(entryName, "D:"))
                     {
                         Console.WriteLine($"[Dir ] {entryName.Substring(2)}");
                     }
                     else
                     {
-                        Console.WriteLine($"[File] {entryName}, Size: {entryLength} bytes");
+                        Console.WriteLine($"[File] {entryName}, Size: {entryLength} B");
                     }
 
                     stream.Seek(entryLength, SeekOrigin.Current);
