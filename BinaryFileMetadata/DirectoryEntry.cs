@@ -2,25 +2,24 @@
 
 namespace BinaryFileMetadata
 {
-
     public class DirectoryEntry
     {
         public string Name;
         public DirectoryEntry Parent;
 
+        // Array to store subdirectories
         private DirectoryEntry[] subDirectories;
         private int dirCount;
-
+        // Array to store file names
         private string[] files;
         private int fileCount;
-
+        // Initial capacity for subdirectories and files arrays
         private const int INITIAL_CAPACITY = 8;
 
         public DirectoryEntry(string name, DirectoryEntry parent)
         {
             Name = name;
             Parent = parent;
-
             subDirectories = new DirectoryEntry[INITIAL_CAPACITY];
             files = new string[INITIAL_CAPACITY];
             dirCount = 0;
@@ -29,8 +28,10 @@ namespace BinaryFileMetadata
 
         public void AddSubdirectory(DirectoryEntry directory)
         {
+            // Checking if the subDirectories array needs to be resized
             if (dirCount == subDirectories.Length)
             {
+                // Doubling the size of the subDirectories array
                 DirectoryEntry[] bigger = new DirectoryEntry[subDirectories.Length * 2];
                 for (int i = 0; i < subDirectories.Length; i++)
                 {
@@ -38,9 +39,11 @@ namespace BinaryFileMetadata
                 }
                 subDirectories = bigger;
             }
+            // Adding the new subdirectory and increment the count
             subDirectories[dirCount++] = directory;
         }
 
+        // Name of the subdirectory to remove
         public bool RemoveSubdirectory(string directoryName)
         {
             for (int i = 0; i < dirCount; i++)
@@ -56,6 +59,7 @@ namespace BinaryFileMetadata
                     return true;
                 }
             }
+            // Subdirectory is not found
             return false;
         }
 
@@ -123,21 +127,17 @@ namespace BinaryFileMetadata
             return result;
         }
 
-
         public string GetFullPath()
         {
+            // If there is no parent then we are in the root
             if (Parent == null)
-                return "\\"; 
+                return "\\";
+
+            string parentPath = Parent.GetFullPath();
+            if (StringImplementations.CustomCompare(parentPath, "\\") == 0)
+                return "\\" + Name;
             else
-            {
-                string parentPath = Parent.GetFullPath();
-                if (StringImplementations.CustomCompare(parentPath, "\\") == 0)
-                    return "\\" + Name;
-                else
-                    return parentPath + "\\" + Name;
-            }
+                return parentPath + "\\" + Name;
         }
-
-
     }
 }

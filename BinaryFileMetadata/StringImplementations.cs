@@ -2,7 +2,6 @@
 
 namespace BinaryFileMetadata
 {
-
     public static class StringImplementations
     {
         public static string[] Split(string input, char delimiter)
@@ -60,65 +59,9 @@ namespace BinaryFileMetadata
             return new string(result);
         }
 
-
-        /// A simple "custom" hash function (example only).
-        public static int CustomHash(string input)
-        {
-            int hash = 0;
-            for (int i = 0; i < input.Length; i++)
-            {
-                hash = (hash * 31 + input[i]) % int.MaxValue;
-            }
-            return hash;
-        }
-
-
-        /// Fixed-width file listing format (not heavily used here, just an example).
-        public static string FormatFileListing(string fileName, int fileSize)
-        {
-            const int padding = 10;
-            char[] formattedLine = new char[padding + 5];
-
-            int i;
-            for (i = 0; i < fileName.Length && i < padding; i++)
-            {
-                formattedLine[i] = fileName[i];
-            }
-            for (; i < padding; i++)
-            {
-                formattedLine[i] = ' ';
-            }
-
-            string sizeString = fileSize + "B;";
-            for (int j = 0; j < sizeString.Length; j++)
-            {
-                formattedLine[padding + j] = sizeString[j];
-            }
-
-            return new string(formattedLine);
-        }
-
-        /// Convert a string to lowercase manually.
-        public static string ToLower(string input)
-        {
-            char[] result = new char[input.Length];
-            for (int i = 0; i < input.Length; i++)
-            {
-                char c = input[i];
-                if (c >= 'A' && c <= 'Z')
-                {
-                    c = (char)(c + 32);
-                }
-                result[i] = c;
-            }
-            return new string(result);
-        }
-
-        /// Compare two strings lexicographically.
-        /// Returns 0 if equal, < 0 if a < b, > 0 if a > b.
         public static int CustomCompare(string a, string b)
         {
-            if (a == null && b == null) 
+            if (a == null && b == null)
                 return 0;
             if (a == null) 
                 return -1;
@@ -136,7 +79,6 @@ namespace BinaryFileMetadata
             return a.Length - b.Length;
         }
 
-        /// Checks if a string is null or consists only of whitespace.
         public static bool IsNullOrWhiteSpace(string str)
         {
             if (str == null) return true;
@@ -149,36 +91,37 @@ namespace BinaryFileMetadata
             }
             return true;
         }
+
+        public static string ToLower(string input)
+        {
+            char[] result = new char[input.Length];
+            for (int i = 0; i < input.Length; i++)
+            {
+                char c = input[i];
+                if (c >= 'A' && c <= 'Z')
+                {
+                    c = (char)(c + 32);
+                }
+                result[i] = c;
+            }
+            return new string(result);
+        }
+
         public static bool StartsWith(string input, string prefix)
         {
-            // If prefix is null, treat it as empty string
-            if (prefix == null)
-            {
+            if (prefix == null) 
                 prefix = string.Empty;
-            }
-
-            // If input is null, it can only start with a null or empty prefix
-            if (input == null)
-            {
+            if (input == null) 
                 return prefix.Length == 0;
-            }
-
-            // If prefix length is greater than input length, input cannot start with prefix
-            if (prefix.Length > input.Length)
-            {
+            if (prefix.Length > input.Length) 
                 return false;
-            }
 
-            // Compare each character of the prefix with the input
             for (int i = 0; i < prefix.Length; i++)
             {
-                if (input[i] != prefix[i])
-                {
-                    return false; // Mismatch found
-                }
+                if (input[i] != prefix[i]) 
+                    return false;
             }
-
-            return true; // All characters matched
+            return true;
         }
     }
 }

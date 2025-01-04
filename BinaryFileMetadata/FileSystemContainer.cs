@@ -1,21 +1,66 @@
-﻿using System;
+﻿using BinaryFileMetadata.CustomDataStructs;
+using System;
 using System.IO;
 
 namespace BinaryFileMetadata
 {
+    // A container that stores files in blocks of fixed size, with deduplication via BlockIndex.
+    // It serializes/deserializes the BlockIndex and FileRecords to/from the container file.
     public class FileSystemContainer
     {
         private string containerPath;
         public string ContainerPath => containerPath;
 
-        public FileSystemContainer(string path)
+        private int blockSize;
+        public int BlockSize => blockSize;
+
+        // The global block index for deduplication
+        private BlockIndex blockIndex;
+
+        // Each file stored as a list of references to blocks in blockIndex
+        public CustomList<FileRecord> fileRecords;
+
+
+        public FileSystemContainer(string path, int blockSize)
         {
-            containerPath = path;
+            this.containerPath = path;
+            this.blockSize = blockSize;
+
+            blockIndex = new BlockIndex();
+            fileRecords = new CustomList<FileRecord>();
+
             if (!File.Exists(containerPath))
             {
-                using (File.Create(containerPath))
+                // Create an empty container with initial metadata
+                using (FileStream fs = new FileStream(containerPath, FileMode.Create, FileAccess.Write))
+                using (BinaryWriter writer = new BinaryWriter(fs))
                 {
-                    // Ensure container file exists
+                    // Write blockSize
+                    writer.Write(blockSize);
+                    // Write empty BlockIndex
+                    blockIndex.Serialize(writer);
+                    // Write empty FileRecords
+                    writer.Write(fileRecords.Count);
+                }
+            }
+            else
+            {
+                // Load existing data
+                using (FileStream fs = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
+                using (BinaryReader reader = new BinaryReader(fs))
+                {
+                    // Read blockSize
+                    blockSize = reader.ReadInt32();
+                    // Read BlockIndex
+                    blockIndex.Deserialize(reader);
+                    // Read FileRecords
+                    int numFiles = reader.ReadInt32();
+                    for (int i = 0; i < numFiles; i++)
+                    {
+                        FileRecord fr = new FileRecord("");
+                        fr.Deserialize(reader);
+                        fileRecords.Add(fr);
+                    }
                 }
             }
         }
@@ -25,207 +70,164 @@ namespace BinaryFileMetadata
             if (!File.Exists(sourcePath))
                 throw new FileNotFoundException($"Source file '{sourcePath}' not found.");
 
-            var bytes = File.ReadAllBytes(sourcePath);
-            using (var stream = new FileStream(containerPath, FileMode.Append, FileAccess.Write))
+            // Read entire file from the local filesystem
+            byte[] allBytes = File.ReadAllBytes(sourcePath);
+
+            // Create a new FileRecord
+            FileRecord fileRecord = new FileRecord(fullPath);
+
+            // Break the data into blocks of size 'blockSize'
+            int offset = 0;
+            while (offset < allBytes.Length)
             {
-                WriteString(stream, fullPath);
-                WriteBytes(stream, bytes);
+                int chunkSize = Math.Min(blockSize, allBytes.Length - offset);
+                byte[] blockData = new byte[chunkSize];
+                for (int i = 0; i < chunkSize; i++)
+                {
+                    blockData[i] = allBytes[offset + i];
+                }
+                offset += chunkSize;
+
+                // Add the block to the BlockIndex (dedup)
+                int blockIndexId = blockIndex.AddBlock(blockData);
+
+                // Add that block index to the FileRecord
+                fileRecord.Blocks.Add(blockIndexId);
             }
 
-            // Debug statement
-            Console.WriteLine($"Debug: Stored file '{fullPath}' with size {bytes.Length} bytes.");
+            // Add the FileRecord to our in-memory list
+            fileRecords.Add(fileRecord);
+
+            // Serialize the updated BlockIndex and FileRecords to the container
+            SerializeContainer();
+
+            Console.WriteLine($"Debug: '{sourcePath}' stored as '{fullPath}' in blocks of size {blockSize}.");
         }
 
         public void CopyFileOutFromContainer(string fullPath, string destinationPath)
         {
-            using (var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
+            int fileIndex = FindFileRecordIndex(fullPath);
+            if (fileIndex < 0)
             {
-                while (stream.Position < stream.Length)
+                throw new FileNotFoundException($"File '{fullPath}' not found in container.");
+            }
+
+            FileRecord record = fileRecords[fileIndex];
+
+            using (var fs = new FileStream(destinationPath, FileMode.Create, FileAccess.Write))
+            {
+                // For each block ID in the file, fetch the data and write out
+                for (int i = 0; i < record.Blocks.Count; i++)
                 {
-                    string entryName = ReadString(stream);
-                    if (entryName == null) break;
-
-                    int entryLength = ReadInt(stream);
-
-                    // Skip directories
-                    if (StringImplementations.StartsWith(entryName, "D:"))
+                    BlockRecord br = blockIndex.GetBlockRecord(record.Blocks[i]);
+                    if (br != null)
                     {
-                        stream.Seek(entryLength, SeekOrigin.Current);
-                        continue;
-                    }
-
-                    if (entryName == fullPath)
-                    {
-                        byte[] fileData = ReadBytes(stream, entryLength);
-                        File.WriteAllBytes(destinationPath, fileData);
-                        return;
-                    }
-                    else
-                    {
-                        stream.Seek(entryLength, SeekOrigin.Current);
+                        fs.Write(br.BlockData, 0, br.BlockData.Length);
                     }
                 }
             }
-            throw new FileNotFoundException($"File '{fullPath}' not found in the container.");
-        }
-
-        public void ListFiles()
-        {
-            using (var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
-            {
-                while (stream.Position < stream.Length)
-                {
-                    string entryName = ReadString(stream);
-                    if (entryName == null) 
-                        break;
-
-                    int entryLength = ReadInt(stream);
-
-                    if (StringImplementations.StartsWith(entryName, "D:"))
-                    {
-                        Console.WriteLine($"[Dir ] {entryName.Substring(2)}");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"[File] {entryName}, Size: {entryLength} B");
-                    }
-
-                    stream.Seek(entryLength, SeekOrigin.Current);
-                }
-            }
+            Console.WriteLine($"Debug: Copied file '{fullPath}' to '{destinationPath}'.");
         }
 
         public void RemoveFile(string fullPath)
         {
-            string tempPath = containerPath + ".tmp";
-
-            using (var input = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
-            using (var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write))
+            int fileIndex = FindFileRecordIndex(fullPath);
+            if (fileIndex < 0)
             {
-                while (input.Position < input.Length)
-                {
-                    string currentName = ReadString(input);
-                    int dataLength = ReadInt(input);
-
-                    if (currentName == fullPath)
-                    {
-                        // Skip this entry
-                        input.Seek(dataLength, SeekOrigin.Current);
-                    }
-                    else
-                    {
-                        // Copy as-is
-                        WriteString(output, currentName);
-                        WriteBytes(output, ReadBytes(input, dataLength));
-                    }
-                }
+                Console.WriteLine($"File '{fullPath}' not found in container.");
+                return;
             }
 
-            File.Delete(containerPath);
-            File.Move(tempPath, containerPath);
-        }
+            FileRecord record = fileRecords[fileIndex];
 
-        public void CreateDirectoryEntry(string fullPath)
-        {
-            using (var stream = new FileStream(containerPath, FileMode.Append, FileAccess.Write))
+            // Decrement the reference count for each block
+            for (int i = 0; i < record.Blocks.Count; i++)
             {
-                string dirEntryName = "D:" + fullPath;
-                WriteString(stream, dirEntryName);
-
-                // Store an empty payload for directories
-                byte[] emptyPayload = new byte[0];
-                WriteBytes(stream, emptyPayload);
+                blockIndex.DecrementRefCount(record.Blocks[i]);
             }
-        }
 
+            // Remove the FileRecord from our list
+            fileRecords.RemoveAt(fileIndex);
+
+            // Serialize the updated BlockIndex and FileRecords to the container
+            SerializeContainer();
+
+            Console.WriteLine($"Debug: Removed file '{fullPath}' from container.");
+        }
 
         public long GetFileSizeInContainer(string fullPath)
         {
+            int fileIndex = FindFileRecordIndex(fullPath);
+            if (fileIndex < 0)
+                return -1;
 
-            using (var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
+            FileRecord record = fileRecords[fileIndex];
+            long totalSize = 0;
+            for (int i = 0; i < record.Blocks.Count; i++)
             {
-                while (stream.Position < stream.Length)
+                BlockRecord br = blockIndex.GetBlockRecord(record.Blocks[i]);
+                if (br != null)
                 {
-                    string entryName = ReadString(stream);
-                    if (entryName == null)
-                    {
-                        Console.WriteLine("Debug: Reached end of container without finding the file.");
-                        break;
-                    }
-
-                    int entryLength = ReadInt(stream);
-
-                    
-                    // Skip directories
-                    if (entryName.StartsWith("D:"))
-                    {
-                        stream.Seek(entryLength, SeekOrigin.Current);
-                        continue;
-                    }
-
-                    // It's a file
-                    if (String.Equals(entryName, fullPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Move past the file data
-                        stream.Seek(entryLength, SeekOrigin.Current);
-                        return entryLength;
-                    }
-                    else
-                    {
-                        // Not a match; skip the file data
-                        stream.Seek(entryLength, SeekOrigin.Current);
-                    }
+                    totalSize += br.BlockData.Length;
                 }
             }
+            return totalSize;
+        }
 
-            // Not found in container
+        public void ListFiles()
+        {
+            Console.WriteLine("=== Files in Container (Deduplicated) ===");
+            for (int i = 0; i < fileRecords.Count; i++)
+            {
+                FileRecord record = fileRecords[i];
+                long size = GetFileSizeInContainer(record.FullPath);
+                Console.WriteLine($"[File] {record.FullPath}, Size: {size} B, Blocks: {record.Blocks.Count}");
+            }
+            Console.WriteLine("=========================================");
+        }
+
+        private int FindFileRecordIndex(string fullPath)
+        {
+            for (int i = 0; i < fileRecords.Count; i++)
+            {
+                if (StringImplementations.CustomCompare(fileRecords[i].FullPath, fullPath) == 0)
+                {
+                    return i;
+                }
+            }
             return -1;
         }
 
-
-
-
-        // Helper methods
-        private byte[] ReadBytes(FileStream stream, int length)
+        private void SerializeContainer()
         {
-            byte[] data = new byte[length];
-            stream.Read(data, 0, length);
-            return data;
+            using (FileStream fs = new FileStream(containerPath, FileMode.Create, FileAccess.Write))
+            using (BinaryWriter writer = new BinaryWriter(fs))
+            {
+                // Write blockSize
+                writer.Write(blockSize);
+                // Serialize BlockIndex
+                blockIndex.Serialize(writer);
+                // Serialize FileRecords
+                writer.Write(fileRecords.Count);
+                for (int i = 0; i < fileRecords.Count; i++)
+                {
+                    fileRecords[i].Serialize(writer);
+                }
+            }
         }
 
-        private void WriteString(FileStream stream, string value)
+        public int FileRecordCount
         {
-            byte[] lengthBytes = BitConverter.GetBytes(value.Length);
-            stream.Write(lengthBytes, 0, lengthBytes.Length);
-
-            byte[] stringBytes = System.Text.Encoding.UTF8.GetBytes(value);
-            stream.Write(stringBytes, 0, stringBytes.Length);
+            get 
+            { 
+                return fileRecords.Count; 
+            }
         }
 
-        private string ReadString(FileStream stream)
+        public FileRecord GetFileRecord(int index)
         {
-            byte[] lengthBytes = new byte[4];
-            int readCount = stream.Read(lengthBytes, 0, lengthBytes.Length);
-            if (readCount < 4) return null;
-
-            int length = BitConverter.ToInt32(lengthBytes, 0);
-            byte[] stringBytes = new byte[length];
-            stream.Read(stringBytes, 0, length);
-            return System.Text.Encoding.UTF8.GetString(stringBytes);
+            return fileRecords[index];
         }
 
-        private void WriteBytes(FileStream stream, byte[] data)
-        {
-            byte[] lengthBytes = BitConverter.GetBytes(data.Length);
-            stream.Write(lengthBytes, 0, lengthBytes.Length);
-            stream.Write(data, 0, data.Length);
-        }
-
-        private int ReadInt(FileStream stream)
-        {
-            byte[] intBytes = new byte[4];
-            stream.Read(intBytes, 0, intBytes.Length);
-            return BitConverter.ToInt32(intBytes, 0);
-        }
     }
 }

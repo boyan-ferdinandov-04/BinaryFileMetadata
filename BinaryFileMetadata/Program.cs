@@ -6,11 +6,30 @@ namespace BinaryFileMetadata
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Welcome to the Binary File System Simulator (with directories).");
-            Console.WriteLine("Commands: cpin <src> <fileName>, cpout <fileName> <dest>, rm <fileName>, ls, md <dir>, cd <dir>, rd <dir>, exit");
+            Console.WriteLine("Welcome to the Binary File System Simulator (with block-level deduplication).");
+            Console.Write("Enter block size for container (bytes): ");
+            string? blockSizeInput = Console.ReadLine();
 
-            var fileSystem = new FileSystemContainer("container5.bin");
+            int blockSize;
+            if (!int.TryParse(blockSizeInput, out blockSize) || blockSize <= 0)
+            {
+                blockSize = 1024;
+                Console.WriteLine("Invalid input. Using default block size of 1024 bytes.");
+            }
+
+            // Create or open the container with the user-specified block size
+            var fileSystem = new FileSystemContainer("demo5.bin", blockSize);
             var directoryManager = new DirectoryManager(fileSystem);
+
+            Console.WriteLine("\nCommands:");
+            Console.WriteLine("  cpin <sourcePath> <fileNameInContainer>    - Copy file into container");
+            Console.WriteLine("  cpout <fileNameInContainer> <destinationPath> - Copy file out of container");
+            Console.WriteLine("  rm <fileNameInContainer>                   - Remove file from container");
+            Console.WriteLine("  ls                                         - List contents of current directory");
+            Console.WriteLine("  md <directoryName>                         - Make a new directory");
+            Console.WriteLine("  cd <directoryName|..|\\>                    - Change directory");
+            Console.WriteLine("  rd <directoryName>                         - Remove directory");
+            Console.WriteLine("  exit                                       - Exit the program");
 
             while (true)
             {
@@ -33,53 +52,43 @@ namespace BinaryFileMetadata
                         case "cpin":
                             if (inputArgs.Length != 3)
                             {
-                                Console.WriteLine("Usage: cpin <sourcePath> <fileName>");
+                                Console.WriteLine("Usage: cpin <sourcePath> <fileNameInContainer>");
                                 break;
                             }
                             {
                                 string sourcePath = inputArgs[1];
                                 string fileName = inputArgs[2];
-                                string currentDirPath = directoryManager.GetCurrentDirectoryFullPath();
-                                string fileFullPath = currentDirPath == "\\" ? "\\" + fileName : currentDirPath + "\\" + fileName;
-
-                                fileSystem.CopyFileIntoContainer(sourcePath, fileFullPath);
-                                directoryManager.AddFileToCurrentDirectory(fileName);
-                                Console.WriteLine($"File '{sourcePath}' copied into container as '{fileFullPath}'.");
+                                directoryManager.CopyFileIn(sourcePath, fileName);
+                                break;
                             }
-                            break;
-
 
                         case "cpout":
                             if (inputArgs.Length != 3)
                             {
-                                Console.WriteLine("Usage: cpout <containerFileName> <destinationPath>");
+                                Console.WriteLine("Usage: cpout <fileNameInContainer> <destinationPath>");
                                 break;
                             }
                             {
                                 string containerFileName = inputArgs[1];
                                 string destinationPath = inputArgs[2];
-                                fileSystem.CopyFileOutFromContainer(containerFileName, destinationPath);
-                                Console.WriteLine($"File '{containerFileName}' copied to '{destinationPath}'.");
+                                directoryManager.CopyFileOut(containerFileName, destinationPath);
+                                break;
                             }
-                            break;
 
                         case "rm":
                             if (inputArgs.Length != 2)
                             {
-                                Console.WriteLine("Usage: rm <fileName>");
+                                Console.WriteLine("Usage: rm <fileNameInContainer>");
                                 break;
                             }
                             {
                                 string fileNameToRemove = inputArgs[1];
-                                fileSystem.RemoveFile(fileNameToRemove);
-                                directoryManager.RemoveFileFromCurrentDirectory(fileNameToRemove);
-                                Console.WriteLine($"File '{fileNameToRemove}' removed from the container.");
+                                directoryManager.RemoveFile(fileNameToRemove);
+                                break;
                             }
-                            break;
 
                         case "ls":
-                            //directoryManager.ListCurrentDirectory();
-                            fileSystem.ListFiles();
+                            directoryManager.ListCurrentDirectory();
                             break;
 
                         case "md":
@@ -91,8 +100,8 @@ namespace BinaryFileMetadata
                             {
                                 string dirName = inputArgs[1];
                                 directoryManager.MakeDirectory(dirName);
+                                break;
                             }
-                            break;
 
                         case "cd":
                             if (inputArgs.Length != 2)
@@ -103,8 +112,8 @@ namespace BinaryFileMetadata
                             {
                                 string targetDir = inputArgs[1];
                                 directoryManager.ChangeDirectory(targetDir);
+                                break;
                             }
-                            break;
 
                         case "rd":
                             if (inputArgs.Length != 2)
@@ -115,15 +124,15 @@ namespace BinaryFileMetadata
                             {
                                 string dirName = inputArgs[1];
                                 directoryManager.RemoveDirectory(dirName);
+                                break;
                             }
-                            break;
 
                         case "exit":
                             Console.WriteLine("Exiting the program. Goodbye!");
                             return;
 
                         default:
-                            Console.WriteLine("Invalid command. Supported commands: cpin, ls, rm, cpout, md, cd, rd, exit.");
+                            Console.WriteLine("Invalid command. Supported commands: cpin, cpout, rm, ls, md, cd, rd, exit.");
                             break;
                     }
                 }
