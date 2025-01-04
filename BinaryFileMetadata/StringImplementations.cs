@@ -121,5 +121,18 @@
             }
             return true;
         }
+
+        public static int Length(string input)
+        {
+            if (input == null)
+                return 0;
+
+            int length = 0;
+            foreach (char c in input)
+            {
+                length++;
+            }
+            return length;
+        }
     }
 }

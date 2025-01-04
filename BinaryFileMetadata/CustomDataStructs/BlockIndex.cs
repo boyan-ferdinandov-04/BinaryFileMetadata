@@ -83,7 +83,7 @@ namespace BinaryFileMetadata.CustomDataStructs
                 string hash = ReadString(reader);
                 int dataLength = reader.ReadInt32();
                 byte[] data = reader.ReadBytes(dataLength);
-                // Reading ReferenceCount
+                // Reading References
                 int refCount = reader.ReadInt32();
 
                 BlockRecord br = new BlockRecord(hash, data)

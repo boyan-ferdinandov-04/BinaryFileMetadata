@@ -2,7 +2,7 @@
 {
     public class BlockRecord
     {
-        // e.g., a simple string representing the hash
+        // a simple string representing the hash
         public string BlockHash;
         // Actual block contents
         public byte[] BlockData;

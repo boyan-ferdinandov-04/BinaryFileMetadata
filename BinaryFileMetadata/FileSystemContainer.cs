@@ -33,11 +33,8 @@ namespace BinaryFileMetadata
                 using (FileStream fs = new FileStream(containerPath, FileMode.Create, FileAccess.Write))
                 using (BinaryWriter writer = new BinaryWriter(fs))
                 {
-                    // Write blockSize
                     writer.Write(blockSize);
-                    // Write empty BlockIndex
                     blockIndex.Serialize(writer);
-                    // Write empty FileRecords
                     writer.Write(fileRecords.Count);
                 }
             }
@@ -64,14 +61,11 @@ namespace BinaryFileMetadata
         {
             if (!File.Exists(sourcePath))
                 throw new FileNotFoundException($"Source file '{sourcePath}' not found.");
-
-            // Reading entire file from the local filesystem
             byte[] allBytes = File.ReadAllBytes(sourcePath);
 
-            // Creating a new FileRecord
             FileRecord fileRecord = new FileRecord(fullPath);
 
-            // Breaking the data into blocks of size 'blockSize'
+            // Breaking the data into blocks
             int offset = 0;
             while (offset < allBytes.Length)
             {
@@ -105,7 +99,6 @@ namespace BinaryFileMetadata
 
             using (var fs = new FileStream(destinationPath, FileMode.Create, FileAccess.Write))
             {
-                // We fetch the data 
                 for (int i = 0; i < record.Blocks.Count; i++)
                 {
                     BlockRecord br = blockIndex.GetBlockRecord(record.Blocks[i]);
@@ -191,11 +184,8 @@ namespace BinaryFileMetadata
             using (FileStream fs = new FileStream(containerPath, FileMode.Create, FileAccess.Write))
             using (BinaryWriter writer = new BinaryWriter(fs))
             {
-                // Writing blockSize
                 writer.Write(blockSize);
-                // Serializing BlockIndex
                 blockIndex.Serialize(writer);
-                // Serializing FileRecords
                 writer.Write(fileRecords.Count);
                 for (int i = 0; i < fileRecords.Count; i++)
                 {

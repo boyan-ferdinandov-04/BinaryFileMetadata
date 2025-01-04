@@ -220,7 +220,7 @@ namespace BinaryFileMetadata
             return currentDirectory.GetFullPath();
         }
 
-        // Copy a local file into the container (uses block-based dedup).
+        // Copy a local file into the container (uses block-based deduplication).
         // Also adds an entry to the current directory's file list.
         public void CopyFileIn(string sourcePath, string fileName)
         {

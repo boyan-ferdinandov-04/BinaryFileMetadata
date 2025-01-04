@@ -1,4 +1,6 @@
-﻿namespace BinaryFileMetadata.CustomDataStructs
+﻿using System.Text;
+
+namespace BinaryFileMetadata.CustomDataStructs
 {
     public class FileRecord
     {
@@ -35,8 +37,8 @@
 
         private void WriteString(BinaryWriter writer, string value)
         {
-            writer.Write(value.Length);
-            writer.Write(System.Text.Encoding.UTF8.GetBytes(value));
+            writer.Write(StringImplementations.Length(value));
+            writer.Write(Encoding.UTF8.GetBytes(value));
         }
 
 
@@ -44,7 +46,7 @@
         {
             int length = reader.ReadInt32();
             byte[] bytes = reader.ReadBytes(length);
-            return System.Text.Encoding.UTF8.GetString(bytes);
+            return Encoding.UTF8.GetString(bytes);
         }
     }
 }
