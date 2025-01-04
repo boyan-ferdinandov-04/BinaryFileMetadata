@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Text;
 
 namespace BinaryFileMetadata.CustomDataStructs
 {
@@ -53,7 +49,7 @@ namespace BinaryFileMetadata.CustomDataStructs
             blocks[blockIndex].ReferenceCount--;
             if (blocks[blockIndex].ReferenceCount <= 0)
             {
-                // Remove the block entirely
+                // Removing the block entirely
                 blocks.RemoveAt(blockIndex);
             }
         }
@@ -67,7 +63,7 @@ namespace BinaryFileMetadata.CustomDataStructs
 
         public void Serialize(BinaryWriter writer)
         {
-            // Write the number of blocks
+            // Writing the number of blocks
             writer.Write(blocks.Count);
             for (int i = 0; i < blocks.Count; i++)
             {
@@ -87,7 +83,7 @@ namespace BinaryFileMetadata.CustomDataStructs
                 string hash = ReadString(reader);
                 int dataLength = reader.ReadInt32();
                 byte[] data = reader.ReadBytes(dataLength);
-                // Read ReferenceCount
+                // Reading ReferenceCount
                 int refCount = reader.ReadInt32();
 
                 BlockRecord br = new BlockRecord(hash, data)
@@ -102,6 +98,7 @@ namespace BinaryFileMetadata.CustomDataStructs
             long sum = 0;
             for (int i = 0; i < data.Length; i++)
             {
+                //1000000007 is a large prime number, which helps prevent overflow and reduces the chance of collisions in the hash values
                 sum = (sum * 31 + data[i]) % 1000000007;
             }
             return "blk" + sum.ToString();
@@ -110,14 +107,14 @@ namespace BinaryFileMetadata.CustomDataStructs
         private void WriteString(BinaryWriter writer, string value)
         {
             writer.Write(value.Length);
-            writer.Write(System.Text.Encoding.UTF8.GetBytes(value));
+            writer.Write(Encoding.UTF8.GetBytes(value));
         }
 
         private string ReadString(BinaryReader reader)
         {
             int length = reader.ReadInt32();
             byte[] bytes = reader.ReadBytes(length);
-            return System.Text.Encoding.UTF8.GetString(bytes);
+            return Encoding.UTF8.GetString(bytes);
         }
     }
 }

@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace BinaryFileMetadata
+﻿namespace BinaryFileMetadata
 {
     public static class StringImplementations
     {

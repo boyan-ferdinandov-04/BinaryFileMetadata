@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace BinaryFileMetadata
+﻿namespace BinaryFileMetadata
 {
 
     public class CustomList<T>

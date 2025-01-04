@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace BinaryFileMetadata.CustomDataStructs
+﻿namespace BinaryFileMetadata.CustomDataStructs
 {
     public class FileRecord
     {
@@ -20,11 +14,8 @@ namespace BinaryFileMetadata.CustomDataStructs
 
         public void Serialize(BinaryWriter writer)
         {
-            // Write FullPath
             WriteString(writer, FullPath);
-            // Write number of blocks
             writer.Write(Blocks.Count);
-            // Write each block index
             for (int i = 0; i < Blocks.Count; i++)
             {
                 writer.Write(Blocks[i]);
@@ -33,9 +24,7 @@ namespace BinaryFileMetadata.CustomDataStructs
 
         public void Deserialize(BinaryReader reader)
         {
-            // Read FullPath
             FullPath = ReadString(reader);
-            // Read number of blocks
             int numBlocks = reader.ReadInt32();
             for (int i = 0; i < numBlocks; i++)
             {

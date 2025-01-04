@@ -1,6 +1,4 @@
 ﻿using BinaryFileMetadata.CustomDataStructs;
-using System;
-using System.IO;
 
 namespace BinaryFileMetadata
 {
@@ -45,15 +43,12 @@ namespace BinaryFileMetadata
             }
             else
             {
-                // Load existing data
+                // Loading existing data
                 using (FileStream fs = new FileStream(containerPath, FileMode.Open, FileAccess.Read))
                 using (BinaryReader reader = new BinaryReader(fs))
                 {
-                    // Read blockSize
                     blockSize = reader.ReadInt32();
-                    // Read BlockIndex
                     blockIndex.Deserialize(reader);
-                    // Read FileRecords
                     int numFiles = reader.ReadInt32();
                     for (int i = 0; i < numFiles; i++)
                     {
@@ -70,13 +65,13 @@ namespace BinaryFileMetadata
             if (!File.Exists(sourcePath))
                 throw new FileNotFoundException($"Source file '{sourcePath}' not found.");
 
-            // Read entire file from the local filesystem
+            // Reading entire file from the local filesystem
             byte[] allBytes = File.ReadAllBytes(sourcePath);
 
-            // Create a new FileRecord
+            // Creating a new FileRecord
             FileRecord fileRecord = new FileRecord(fullPath);
 
-            // Break the data into blocks of size 'blockSize'
+            // Breaking the data into blocks of size 'blockSize'
             int offset = 0;
             while (offset < allBytes.Length)
             {
@@ -87,18 +82,12 @@ namespace BinaryFileMetadata
                     blockData[i] = allBytes[offset + i];
                 }
                 offset += chunkSize;
-
-                // Add the block to the BlockIndex (dedup)
                 int blockIndexId = blockIndex.AddBlock(blockData);
-
-                // Add that block index to the FileRecord
                 fileRecord.Blocks.Add(blockIndexId);
             }
 
-            // Add the FileRecord to our in-memory list
             fileRecords.Add(fileRecord);
 
-            // Serialize the updated BlockIndex and FileRecords to the container
             SerializeContainer();
 
             Console.WriteLine($"Debug: '{sourcePath}' stored as '{fullPath}' in blocks of size {blockSize}.");
@@ -116,7 +105,7 @@ namespace BinaryFileMetadata
 
             using (var fs = new FileStream(destinationPath, FileMode.Create, FileAccess.Write))
             {
-                // For each block ID in the file, fetch the data and write out
+                // We fetch the data 
                 for (int i = 0; i < record.Blocks.Count; i++)
                 {
                     BlockRecord br = blockIndex.GetBlockRecord(record.Blocks[i]);
@@ -140,16 +129,15 @@ namespace BinaryFileMetadata
 
             FileRecord record = fileRecords[fileIndex];
 
-            // Decrement the reference count for each block
             for (int i = 0; i < record.Blocks.Count; i++)
             {
                 blockIndex.DecrementRefCount(record.Blocks[i]);
             }
 
-            // Remove the FileRecord from our list
+            // Removing the FileRecord from our list
             fileRecords.RemoveAt(fileIndex);
 
-            // Serialize the updated BlockIndex and FileRecords to the container
+            // Serializing the updated BlockIndex and FileRecords to the container
             SerializeContainer();
 
             Console.WriteLine($"Debug: Removed file '{fullPath}' from container.");
@@ -203,11 +191,11 @@ namespace BinaryFileMetadata
             using (FileStream fs = new FileStream(containerPath, FileMode.Create, FileAccess.Write))
             using (BinaryWriter writer = new BinaryWriter(fs))
             {
-                // Write blockSize
+                // Writing blockSize
                 writer.Write(blockSize);
-                // Serialize BlockIndex
+                // Serializing BlockIndex
                 blockIndex.Serialize(writer);
-                // Serialize FileRecords
+                // Serializing FileRecords
                 writer.Write(fileRecords.Count);
                 for (int i = 0; i < fileRecords.Count; i++)
                 {

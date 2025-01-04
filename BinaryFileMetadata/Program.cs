@@ -17,17 +17,16 @@ namespace BinaryFileMetadata
                 Console.WriteLine("Invalid input. Using default block size of 1024 bytes.");
             }
 
-            // Create or open the container with the user-specified block size
             var fileSystem = new FileSystemContainer("demo5.bin", blockSize);
             var directoryManager = new DirectoryManager(fileSystem);
 
             Console.WriteLine("\nCommands:");
             Console.WriteLine("  cpin <sourcePath> <fileNameInContainer>    - Copy file into container");
-            Console.WriteLine("  cpout <fileNameInContainer> <destinationPath> - Copy file out of container");
+            Console.WriteLine("  cpout <fileNameInContainer> <dest>         - Copy file out of container");
             Console.WriteLine("  rm <fileNameInContainer>                   - Remove file from container");
             Console.WriteLine("  ls                                         - List contents of current directory");
             Console.WriteLine("  md <directoryName>                         - Make a new directory");
-            Console.WriteLine("  cd <directoryName|..|\\>                    - Change directory");
+            Console.WriteLine("  cd <directoryName|..|>                     - Change directory");
             Console.WriteLine("  rd <directoryName>                         - Remove directory");
             Console.WriteLine("  exit                                       - Exit the program");
 

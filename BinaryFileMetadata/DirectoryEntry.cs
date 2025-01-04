@@ -28,10 +28,10 @@ namespace BinaryFileMetadata
 
         public void AddSubdirectory(DirectoryEntry directory)
         {
-            // Checking if the subDirectories array needs to be resized
+            // Checking if the SubDirectories array needs to be resized
             if (dirCount == subDirectories.Length)
             {
-                // Doubling the size of the subDirectories array
+                // Doubling the size of the SubDirectories array
                 DirectoryEntry[] bigger = new DirectoryEntry[subDirectories.Length * 2];
                 for (int i = 0; i < subDirectories.Length; i++)
                 {
@@ -59,7 +59,7 @@ namespace BinaryFileMetadata
                     return true;
                 }
             }
-            // Subdirectory is not found
+            // Subdirectory is not found = false
             return false;
         }
 
