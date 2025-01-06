@@ -7,11 +7,7 @@ namespace BinaryFileMetadata
     public class FileSystemContainer
     {
         private string containerPath;
-        public string ContainerPath => containerPath;
-
         private int blockSize;
-        public int BlockSize => blockSize;
-
         // The global block index for deduplication
         private BlockIndex blockIndex;
 
@@ -153,18 +149,6 @@ namespace BinaryFileMetadata
                 }
             }
             return totalSize;
-        }
-
-        public void ListFiles()
-        {
-            Console.WriteLine("=== Files in Container (Deduplicated) ===");
-            for (int i = 0; i < fileRecords.Count; i++)
-            {
-                FileRecord record = fileRecords[i];
-                long size = GetFileSizeInContainer(record.FullPath);
-                Console.WriteLine($"[File] {record.FullPath}, Size: {size} B, Blocks: {record.Blocks.Count}");
-            }
-            Console.WriteLine("=========================================");
         }
 
         private int FindFileRecordIndex(string fullPath)

@@ -172,14 +172,40 @@ namespace BinaryFileMetadata
 
         public void RemoveDirectory(string name)
         {
-            bool success = currentDirectory.RemoveSubdirectory(name);
-            if (!success)
+            DirectoryEntry dirToRemove = currentDirectory.FindSubdirectory(name);
+            if (dirToRemove == null)
             {
                 Console.WriteLine($"No subdirectory '{name}' in '{currentDirectory.Name}'.");
+                return;
             }
-            else
+
+            // Recursively delete everything under dirToRemove
+            RecursivelyDeleteDirectory(dirToRemove);
+
+            // Finally, remove the directory from the parent's subdirectory list
+            currentDirectory.RemoveSubdirectory(name);
+            Console.WriteLine($"Directory '{name}' removed (with all contents).");
+        }
+
+        private void RecursivelyDeleteDirectory(DirectoryEntry dirEntry)
+        {
+            // 1) Remove all subdirectories (recursively)
+            var subDirs = dirEntry.GetDirectories();
+            for (int i = 0; i < subDirs.Length; i++)
             {
-                Console.WriteLine($"Directory '{name}' removed.");
+                RecursivelyDeleteDirectory(subDirs[i]);
+            }
+
+            // 2) Remove all files in this directory from the container
+            var files = dirEntry.GetFiles();
+            for (int i = 0; i < files.Length; i++)
+            {
+                string fullPath = (StringImplementations.CustomCompare(dirEntry.GetFullPath(), "\\") == 0)
+                    ? "\\" + files[i]
+                    : dirEntry.GetFullPath() + "\\" + files[i];
+
+                // Remove file data from container
+                container.RemoveFile(fullPath);
             }
         }
 

@@ -17,7 +17,7 @@ namespace BinaryFileMetadata
                 Console.WriteLine("Invalid input. Using default block size of 1024 bytes.");
             }
 
-            var fileSystem = new FileSystemContainer("demo5.bin", blockSize);
+            var fileSystem = new FileSystemContainer("demo.bin", blockSize);
             var directoryManager = new DirectoryManager(fileSystem);
 
             Console.WriteLine("\nCommands:");
